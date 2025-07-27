@@ -10,6 +10,7 @@ import time
 import queue
 from collections import defaultdict, deque
 import os
+from dotenv import load_dotenv
 import logging
 import json
 import requests
@@ -47,8 +48,8 @@ DWELL_TIME_THRESHOLD = 15 # seconds
 ALERT_COOLDOWN = 20 # seconds
 
 # --- OpenRouter LLM Config ---
-# It's more secure to use environment variables, but hardcoding for hackathon simplicity.
-OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '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')
+load_dotenv()
+OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions'
 LLM_MODEL = "google/gemini-flash-1.5" # Using a fast and capable model
 
