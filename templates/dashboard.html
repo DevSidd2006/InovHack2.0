@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time AI Analytics Dashboard</title>
+    
+    <!-- Bootstrap CSS & Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    
+    <style>
+        :root {
+            --bs-body-bg: #1a1a1a;
+            --bs-body-color: #e0e0e0;
+            --bs-border-color: #444;
+            --bs-tertiary-bg: #2a2a2a;
+        }
+        .card {
+            background-color: var(--bs-tertiary-bg);
+            border: 1px solid var(--bs-border-color);
+        }
+        #video-container {
+            position: relative;
+            background-color: #000;
+            border: 1px solid var(--bs-border-color);
+            border-radius: .5rem;
+            overflow: hidden;
+        }
+        #video-feed {
+            width: 100%;
+            height: auto;
+            max-height: 400px;
+            object-fit: cover;
+        }
+        body { background: #181a1b; color: #e0e0e0; }
+        .object-badge { margin: 0 4px 4px 0; font-size: 1.1em; }
+        .timeline { max-height: 200px; overflow-y: auto; background: #23272b; border-radius: 8px; padding: 10px; }
+        .llm-history { max-height: 200px; overflow-y: auto; background: #23272b; border-radius: 8px; padding: 10px; }
+        .llm-ask-form { display: flex; gap: 8px; }
+        .llm-ask-form input { flex: 1; }
+        .alert-banner {
+            font-size: 1.1em;
+            font-weight: 600;
+            padding: 10px 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+        @media (max-width: 768px) {
+            .dashboard-row { flex-direction: column; }
+            .sidebar { min-height: unset !important; }
+        }
+    </style>
+</head>
+<body>
+<div class="container-fluid py-3">
+  <div class="row">
+    <!-- Sidebar -->
+    <nav class="col-md-2 d-none d-md-block bg-dark sidebar" style="min-height:100vh;">
+      <div class="position-sticky pt-3">
+        <h4 class="text-white mb-4">🎯 Solutions</h4>
+        <ul class="nav flex-column nav-pills" id="sidebarMenu" role="tablist">
+          <li class="nav-item mb-2"><button class="nav-link active w-100 text-start" id="sidebar-queue" data-bs-toggle="pill" data-bs-target="#tab-queue" type="button" role="tab"><i class="bi bi-people-fill me-2"></i>Queue Management</button></li>
+          <li class="nav-item mb-2"><button class="nav-link w-100 text-start" id="sidebar-crowd" data-bs-toggle="pill" data-bs-target="#tab-crowd" type="button" role="tab"><i class="bi bi-activity me-2"></i>Crowd/Stampede Detection</button></li>
+          <li class="nav-item mb-2"><button class="nav-link w-100 text-start" id="sidebar-weapons" data-bs-toggle="pill" data-bs-target="#tab-weapons" type="button" role="tab"><i class="bi bi-shield-exclamation me-2"></i>Weapons Detection</button></li>
+          <li class="nav-item mb-2"><button class="nav-link w-100 text-start" id="sidebar-traffic" data-bs-toggle="pill" data-bs-target="#tab-traffic" type="button" role="tab"><i class="bi bi-truck-front-fill me-2"></i>Traffic Monitoring</button></li>
+          <li class="nav-item mb-2"><button class="nav-link w-100 text-start" id="sidebar-parking" data-bs-toggle="pill" data-bs-target="#tab-parking" type="button" role="tab"><i class="bi bi-car-front-fill me-2"></i>Smart Parking Assistant</button></li>
+        </ul>
+      </div>
+    </nav>
+    <!-- Main Content -->
+    <main class="col-md-10 ms-sm-auto px-md-4">
+      <h2 class="mb-3">YOLO+LLM Video Analytics Dashboard</h2>
+      <!-- Filters -->
+      <div class="row mb-3">
+        <div class="col-md-2 mb-2">
+          <select class="form-select" id="filter-zone"><option value="">All Zones</option></select>
+        </div>
+        <div class="col-md-2 mb-2">
+          <input type="date" class="form-control" id="filter-date">
+        </div>
+        <div class="col-md-2 mb-2">
+          <select class="form-select" id="filter-camera"><option value="">All Cameras</option></select>
+        </div>
+        <div class="col-md-2 mb-2">
+          <select class="form-select" id="filter-type">
+            <option value="">All Types</option>
+            <option value="crowd">Crowd</option>
+            <option value="queue">Queue</option>
+            <option value="stampede">Stampede</option>
+            <option value="weapons">Weapons</option>
+            <option value="traffic">Traffic</option>
+            <option value="parking">Parking</option>
+          </select>
+        </div>
+      </div>
+      <!-- Video Feed -->
+      <div class="card mb-3 bg-dark text-white">
+        <div class="card-header">Live Video Feed</div>
+        <div class="card-body text-center">
+          <img id="video-feed" src="/video_feed" class="img-fluid rounded border border-secondary" style="max-height: 400px; background: #222;" alt="Video Feed">
+        </div>
+      </div>
+      <!-- Video Source Form (Live/URL) -->
+      <form id="video-source-form" class="mb-3 d-flex" style="gap:8px;align-items:center;">
+        <select class="form-select" id="video-source-type" style="max-width:160px;">
+          <option value="live">Live Camera</option>
+          <option value="url">Video URL</option>
+        </select>
+        <input type="text" class="form-control" id="video-url-input" placeholder="Enter video stream URL (e.g., http://...)" style="display:none;" />
+        <button type="submit" class="btn btn-primary">Set Video Source</button>
+      </form>
+      <script>
+      // Show/hide URL input based on dropdown
+      document.getElementById('video-source-type').addEventListener('change', function() {
+        document.getElementById('video-url-input').style.display = this.value === 'url' ? '' : 'none';
+      });
+      document.getElementById('video-source-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const type = document.getElementById('video-source-type').value;
+        let video_url = '';
+        if (type === 'live') {
+          video_url = '0'; // OpenCV default webcam
+        } else {
+          video_url = document.getElementById('video-url-input').value.trim();
+          if (!video_url) {
+            alert('Please enter a video URL.');
+            return;
+          }
+        }
+        const resp = await fetch('/set_video_source', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({video_url})
+        });
+        const data = await resp.json();
+        if (data.success) {
+          alert('Video source updated! Please refresh the page to see the new feed.');
+        } else {
+          alert('Error: ' + (data.error || 'Could not update video source.'));
+        }
+      });
+      </script>
+      <!-- Tab Content -->
+      <div class="tab-content" id="sidebarTabContent">
+        <div class="tab-pane fade show active" id="tab-queue" role="tabpanel">
+          <div class="row g-2">
+            <div class="col-md-6">
+              <div class="card bg-dark text-white mb-2">
+                <div class="card-header">Live Person Count</div>
+                <div class="card-body"><span id="queue-person-count" class="badge bg-info fs-5">0</span></div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="card bg-dark text-white mb-2">
+                <div class="card-header">Queue Alert</div>
+                <div class="card-body">
+                  <div id="queue-alert-banner" class="alert-banner bg-success text-white">Normal</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card bg-dark text-white mb-3"><div class="card-header">Wait Time vs Count</div><div class="card-body"><canvas id="queue-wait-chart"></canvas></div></div>
+          <div class="card bg-dark text-white mb-3"><div class="card-header">Queue Length Heatmap</div><div class="card-body"><div id="queue-heatmap" style="height:180px;background:#222;border-radius:8px;text-align:center;line-height:180px;color:#aaa;">[Heatmap Placeholder]</div></div></div>
+        </div>
+        <div class="tab-pane fade" id="tab-crowd" role="tabpanel">
+          <div class="row g-2">
+            <div class="col-md-6">
+              <div class="card bg-dark text-white mb-2">
+                <div class="card-header">Live Crowd Density Heatmap</div>
+                <div class="card-body"><div id="crowd-heatmap" style="height:180px;background:#222;border-radius:8px;text-align:center;line-height:180px;color:#aaa;">[Density Heatmap Placeholder]</div></div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="card bg-dark text-white mb-2">
+                <div class="card-header">Red Zone Detection</div>
+                <div class="card-body">
+                  <div id="crowd-redzone-banner" class="alert-banner bg-success text-white">Safe</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card bg-dark text-white mb-3"><div class="card-header">Panic Behavior Detection</div><div class="card-body"><span id="crowd-panic" class="badge bg-secondary">No panic detected</span></div></div>
+          <button class="btn btn-danger mb-3" id="emergency-alert-btn"><i class="bi bi-exclamation-triangle-fill me-2"></i>Emergency Alert</button>
+        </div>
+        <div class="tab-pane fade" id="tab-weapons" role="tabpanel">
+          <div class="card bg-dark text-white mb-3"><div class="card-header">Weapons Detection</div><div class="card-body">
+            <div id="weapons-live-alert" class="alert-banner bg-danger text-white d-none"><i class="bi bi-exclamation-octagon-fill me-2"></i>Weapon Detected! Authorities Notified.</div>
+            <div>Probability: <span id="weapons-prob" class="badge bg-info">0%</span></div>
+            <div id="weapons-bbox" class="mt-2">[Bounding Box Placeholder]</div>
+            <button class="btn btn-warning mt-3" id="weapons-audio-alert-btn"><i class="bi bi-volume-up-fill me-2"></i>Play Audio Alert</button>
+            <div class="mt-2"><small>Snapshot and notification log: <span id="weapons-log">None</span></small></div>
+          </div></div>
+        </div>
+        <div class="tab-pane fade" id="tab-traffic" role="tabpanel">
+          <div class="card bg-dark text-white mb-3"><div class="card-header">Traffic & Emergency Vehicle Detection</div><div class="card-body">
+            <div>Traffic Density: <span id="traffic-density" class="badge bg-info">Normal</span></div>
+            <div id="traffic-congestion-graph" class="mt-3"><canvas id="traffic-chart"></canvas></div>
+            <div class="mt-3">Emergency Vehicle Status: <span id="emergency-vehicle-status" class="badge bg-success">Clear</span></div>
+            <div id="traffic-bbox" class="mt-2">[Bounding Boxes Placeholder]</div>
+          </div></div>
+        </div>
+        <div class="tab-pane fade" id="tab-parking" role="tabpanel">
+          <div class="card bg-dark text-white mb-3"><div class="card-header">Smart Parking Management</div><div class="card-body">
+            <div>Parking Efficiency Score: <span id="parking-efficiency" class="badge bg-info">--</span></div>
+            <div id="parking-map" class="mt-2" style="height:120px;background:#222;border-radius:8px;text-align:center;line-height:120px;color:#aaa;">[Parking Map Placeholder]</div>
+            <div class="mt-2">AI Suggestion: <span id="parking-suggestion" class="badge bg-secondary">--</span></div>
+            <button class="btn btn-primary mt-2" id="parking-voice-btn"><i class="bi bi-mic-fill me-2"></i>Play Voice Suggestion</button>
+          </div></div>
+        </div>
+      </div>
+      <!-- LLM, Timeline, Debug, Detection History Graphs -->
+      <div class="row mt-3">
+        <div class="col-lg-8">
+          <div class="card mb-3 bg-dark text-white"><div class="card-header">Live Object Count</div><div class="card-body" id="object-counts"></div></div>
+          <div class="card mb-3 bg-dark text-white"><div class="card-header">Detection History Timeline</div><div class="card-body timeline" id="detection-timeline"></div></div>
+          <div class="card mb-3 bg-dark text-white">
+            <div class="card-header">Detection History Graphs (per second)</div>
+            <div class="card-body">
+              <canvas id="detection-history-person" height="80"></canvas>
+              <canvas id="detection-history-car" height="80" class="mt-3"></canvas>
+              <canvas id="detection-history-bus" height="80" class="mt-3"></canvas>
+              <canvas id="detection-history-truck" height="80" class="mt-3"></canvas>
+              <canvas id="detection-history-bicycle" height="80" class="mt-3"></canvas>
+              <canvas id="detection-history-motorcycle" height="80" class="mt-3"></canvas>
+              <canvas id="detection-history-knife" height="80" class="mt-3"></canvas>
+              <canvas id="detection-history-gun" height="80" class="mt-3"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="card mb-3 bg-dark text-white"><div class="card-header">LLM Insights (AI Analysis)</div><div class="card-body"><div id="llm-latest" class="mb-2"></div><form id="llm-ask-form" class="llm-ask-form mb-2"><input type="text" id="llm-question" class="form-control" placeholder="Ask the AI about analytics..."><button type="submit" class="btn btn-primary">Ask</button></form><div id="llm-answer" class="mb-2"></div><div class="llm-history" id="llm-history"></div></div></div>
+          <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="darkModeSwitch" checked><label class="form-check-label" for="darkModeSwitch">Dark Mode</label></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// --- Detection History Graphs ---
+const detectionFeatures = [
+  { key: 'person', label: 'Person', color: 'rgba(0, 123, 255, 0.7)' },
+  { key: 'car', label: 'Car', color: 'rgba(40, 167, 69, 0.7)' },
+  { key: 'bus', label: 'Bus', color: 'rgba(255, 193, 7, 0.7)' },
+  { key: 'truck', label: 'Truck', color: 'rgba(220, 53, 69, 0.7)' },
+  { key: 'bicycle', label: 'Bicycle', color: 'rgba(23, 162, 184, 0.7)' },
+  { key: 'motorcycle', label: 'Motorcycle', color: 'rgba(108, 117, 125, 0.7)' },
+  { key: 'knife', label: 'Knife', color: 'rgba(111, 66, 193, 0.7)' },
+  { key: 'gun', label: 'Gun', color: 'rgba(255, 99, 132, 0.7)' },
+];
+const detectionCharts = {};
+function setupDetectionHistoryCharts() {
+  detectionFeatures.forEach(f => {
+    const ctx = document.getElementById('detection-history-' + f.key).getContext('2d');
+    detectionCharts[f.key] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: f.label,
+          data: [],
+          borderColor: f.color,
+          backgroundColor: f.color,
+          fill: false,
+          tension: 0.2,
+          pointRadius: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { display: false },
+          y: { beginAtZero: true, display: true, ticks: { color: '#aaa' } }
+        }
+      }
+    });
+  });
+}
+function updateDetectionHistoryGraphs(history) {
+  // history: [{timestamp, detections: {person: N, car: N, ...}}, ...]
+  detectionFeatures.forEach(f => {
+    const chart = detectionCharts[f.key];
+    if (!chart) return;
+    const labels = history.map(h => h.timestamp ? h.timestamp.slice(11,19) : '');
+    const data = history.map(h => (h.detections && h.detections[f.key]) ? h.detections[f.key] : 0);
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = data;
+    chart.update();
+  });
+}
+// --- Feature Panels Update ---
+function updateFeaturePanels(data, alerts) {
+    // Crowd Detection
+    const crowdCount = (data.current_detections && data.current_detections.person) ? data.current_detections.person : 0;
+    document.getElementById('crowd-count').textContent = `People: ${crowdCount}`;
+    let crowdStatus = 'Normal';
+    if (crowdCount >= 30) crowdStatus = 'Crowd Alert!';
+    document.getElementById('crowd-status').textContent = crowdStatus;
+    document.getElementById('crowd-status').className = 'ms-2 badge ' + (crowdCount >= 30 ? 'bg-warning text-dark' : 'bg-success');
+
+    // Weapons Detection
+    let weaponDetected = false;
+    if (data.current_detections) {
+        if (data.current_detections.gun || data.current_detections.knife) weaponDetected = true;
+    }
+    document.getElementById('weapons-status').textContent = weaponDetected ? 'Weapon detected!' : 'No weapons detected';
+    document.getElementById('weapons-status').className = 'badge ' + (weaponDetected ? 'bg-danger' : 'bg-success');
+
+    // Traffic Management
+    const vehicleLabels = ['car','bus','truck','motorcycle','bicycle'];
+    let vehicleCount = 0;
+    if (data.current_detections) {
+        vehicleLabels.forEach(l => { vehicleCount += data.current_detections[l] || 0; });
+    }
+    document.getElementById('traffic-count').textContent = `Vehicles: ${vehicleCount}`;
+    let trafficStatus = 'Normal';
+    if (vehicleCount >= 20) trafficStatus = 'Heavy Traffic!';
+    document.getElementById('traffic-status').textContent = trafficStatus;
+    document.getElementById('traffic-status').className = 'ms-2 badge ' + (vehicleCount >= 20 ? 'bg-warning text-dark' : 'bg-success');
+
+    // Queue, Stampede, Parking: Not implemented (show default)
+}
+// --- Live Object Count & Class Breakdown ---
+function updateObjectCounts(data) {
+    const container = document.getElementById('object-counts');
+    container.innerHTML = '';
+    if (data && data.current_detections) {
+        Object.entries(data.current_detections).forEach(([label, count]) => {
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-info object-badge';
+            badge.textContent = `${label}: ${count}`;
+            container.appendChild(badge);
+        });
+    }
+}
+
+// --- Detection History Timeline ---
+let detectionHistory = [];
+function updateDetectionTimeline(alerts) {
+    const timeline = document.getElementById('detection-timeline');
+    timeline.innerHTML = '';
+    if (alerts && alerts.length) {
+        alerts.slice(0, 20).forEach(alert => {
+            const div = document.createElement('div');
+            div.className = 'mb-1';
+            div.innerHTML = `<span class="badge bg-${alert.severity === 'high' ? 'danger' : (alert.severity === 'warning' ? 'warning text-dark' : 'secondary')}">${alert.type}</span> <small class="text-muted">${new Date(alert.timestamp).toLocaleTimeString()}</small> <span>${alert.message}</span>`;
+            timeline.appendChild(div);
+        });
+    } else {
+        timeline.innerHTML = '<span class="text-muted">No recent events.</span>';
+    }
+}
+
+// --- LLM Insights Panel (Latest & History) ---
+function updateLLMInsights(data) {
+    // Highlight key phrases in the LLM insight text
+    let llmText = data.text || 'No AI insight yet.';
+    if (llmText && typeof llmText === 'string') {
+        llmText = llmText
+            .replace(/(Dashboard Update \((.*?)\):)/g, '<span class="fw-bold text-warning">$1</span>')
+            .replace(/(\*\*Time:\*\* ([^*]*) )/g, '<span class="fw-bold text-info">$1</span>')
+            .replace(/(\b\d{1,2}:\d{2} ?[AP]M\b)/gi, '<span class="fw-bold text-info">$1</span>') // highlight time like 04:54 PM
+            .replace(/(\*\*People Detected:\*\* [^*]*)/g, function(m) {
+                return m.replace(/people/gi, '<span class="fw-bold text-success">people</span>');
+            })
+            .replace(/(\*\*Recent Alerts:\*\* [^*]*)/g, '<span class="fw-bold text-danger">$1</span>')
+            .replace(/(\*\*Status:\*\* [^*]*)/g, '<span class="fw-bold text-primary">$1</span>');
+    }
+    document.getElementById('llm-latest').innerHTML = llmText;
+    const historyDiv = document.getElementById('llm-history');
+    historyDiv.innerHTML = '';
+    if (data.history && data.history.length) {
+        data.history.slice(0, 20).forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'mb-1';
+            div.innerHTML = `<small class="text-info">${new Date(item.timestamp).toLocaleTimeString()}</small> <span>${item.text}</span>`;
+            historyDiv.appendChild(div);
+        });
+    } else {
+        historyDiv.innerHTML = '<span class="text-muted">No AI history yet.</span>';
+    }
+}
+
+// --- LLM Ask (Q&A) ---
+document.getElementById('llm-ask-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const q = document.getElementById('llm-question').value.trim();
+    if (!q) return;
+    document.getElementById('llm-answer').textContent = 'Thinking...';
+    fetch('/llm_ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.answer) {
+            document.getElementById('llm-answer').textContent = data.answer;
+            document.getElementById('llm-question').value = '';
+        } else {
+            document.getElementById('llm-answer').textContent = data.error || 'No answer.';
+        }
+    });
+});
+
+// --- Dark Mode Toggle ---
+const darkModeSwitch = document.getElementById('darkModeSwitch');
+darkModeSwitch.addEventListener('change', function() {
+    document.documentElement.setAttribute('data-bs-theme', this.checked ? 'dark' : 'light');
+});
+
+// --- Polling for Live Data ---
+function pollAll() {
+    let analyticsData = {};
+    let alertsData = [];
+    fetch('/analytics').then(r => r.json()).then(data => {
+        analyticsData = data;
+        updateObjectCounts(data);
+        fetch('/alerts').then(r => r.json()).then(alerts => {
+            alertsData = alerts;
+            updateDetectionTimeline(alerts);
+            updateFeaturePanels(analyticsData, alertsData);
+        });
+    });
+    fetch('/llm_insights').then(r => r.json()).then(data => {
+        updateLLMInsights(data);
+    });
+    fetch('/detection_history').then(r => r.json()).then(history => {
+        updateDetectionHistoryGraphs(history);
+    });
+}
+setupDetectionHistoryCharts();
+setInterval(pollAll, 2000);
+pollAll();
+</script>
+</body>
+</html>
