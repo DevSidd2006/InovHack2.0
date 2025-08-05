@@ -2,6 +2,13 @@
 
 This project is a real-time video analytics dashboard using YOLOv10 and LLM (Large Language Model) integration, built with Flask and Ultralytics YOLO. It provides live object detection, analytics, and AI-powered insights from any video source (webcam, IP camera, or video file).
 
+## Images
+
+<img width="2822" height="1572" alt="Screenshot 2025-07-27 191742" src="https://github.com/user-attachments/assets/3e739338-7579-48fa-ac79-dc72e597cf71" />
+<img width="2320" height="1256" alt="Screenshot 2025-07-27 191812" src="https://github.com/user-attachments/assets/eaf775be-d494-46a4-a3ab-e225f1249e64" />
+
+
+
 ## Features
 - **Live Video Feed**: View real-time video from webcam, IP stream, or video file.
 - **Object Detection**: Uses YOLOv10 for detecting people, vehicles, weapons, and more.
